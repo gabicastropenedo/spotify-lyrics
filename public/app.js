@@ -100,8 +100,6 @@ function showLoading(show) {
 }
 
 // ---- Lyrics render ----
-const LINE_H = 52; // must match .lyric-line height in the CSS
-
 function renderLyrics(lines) {
   els.lyrics.innerHTML = '';
   const scroll = document.createElement('div');
@@ -154,24 +152,32 @@ function updateSync() {
 }
 
 // Positions the lyrics group so the active line sits exactly at the vertical
-// center of the visible area. Instant (no scroll animation). When the list is
-// shorter than the container it stays centered as a block.
+// center of the visible area. Instant (no scroll animation). Uses the real
+// height of each line (wrapped lines are taller). When the list is shorter
+// than the container it stays centered as a block.
 function positionLyrics(activeIndex) {
   const container = els.lyrics;
   const scroll = container.querySelector('.lyrics-scroll');
   if (!scroll) return;
 
+  const lines = scroll.children;
+  if (!lines.length) return;
+
   const containerH = container.clientHeight;
-  const linesH = menuLines.length * LINE_H;
+  const heights = Array.from(lines).map((el) => el.offsetHeight);
+  const totalH = heights.reduce((a, b) => a + b, 0);
   let y;
 
-  if (linesH <= containerH) {
+  if (totalH <= containerH) {
     // Short list: keep the whole block centered.
-    y = (containerH - linesH) / 2;
+    y = (containerH - totalH) / 2;
   } else if (activeIndex >= 0) {
-    // Center the active line, clamped so the first/last lines aren't lost.
-    y = (containerH - LINE_H) / 2 - activeIndex * LINE_H;
-    y = Math.max(containerH - linesH, Math.min(0, y));
+    let top = 0;
+    for (let i = 0; i < activeIndex && i < heights.length; i++) top += heights[i];
+    const h = heights[activeIndex] || 0;
+    y = (containerH - h) / 2 - top;
+    // Clamp so the first/last lines are never lost.
+    y = Math.max(containerH - totalH, Math.min(0, y));
   } else {
     y = 0;
   }
