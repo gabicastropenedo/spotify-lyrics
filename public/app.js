@@ -100,15 +100,20 @@ function showLoading(show) {
 }
 
 // ---- Lyrics render ----
+const LINE_H = 52; // must match .lyric-line height in the CSS
+
 function renderLyrics(lines) {
   els.lyrics.innerHTML = '';
+  const scroll = document.createElement('div');
+  scroll.className = 'lyrics-scroll';
   lines.forEach((line, i) => {
     const div = document.createElement('div');
     div.className = 'lyric-line';
     div.dataset.index = i;
     div.textContent = line.text || '\u00A0';
-    els.lyrics.appendChild(div);
+    scroll.appendChild(div);
   });
+  els.lyrics.appendChild(scroll);
 }
 
 // ---- Real-time sync ----
@@ -144,29 +149,34 @@ function updateSync() {
   });
 
   if (activeIndex >= 0) {
-    centerActiveLine(lyricEls[activeIndex]);
+    positionLyrics(activeIndex);
   }
 }
 
-// Keeps the active line centered in the visible area between the header
-// and the fixed bottom player bar (not just in the middle of the container).
-function centerActiveLine(activeEl) {
+// Positions the lyrics group so the active line sits exactly at the vertical
+// center of the visible area. Instant (no scroll animation). When the list is
+// shorter than the container it stays centered as a block.
+function positionLyrics(activeIndex) {
   const container = els.lyrics;
-  const playerBar = els.nowPlaying;
-  const playerBarHeight =
-    playerBar && !playerBar.classList.contains('hidden') ? playerBar.offsetHeight : 0;
-  const header = document.querySelector('header');
-  const topBound = header ? header.getBoundingClientRect().bottom : 0;
-  const bottomBound = window.innerHeight - playerBarHeight;
-  const desiredCenter = (topBound + bottomBound) / 2;
-  const lineCenter = activeEl.getBoundingClientRect().top + activeEl.clientHeight / 2;
-  const delta = desiredCenter - lineCenter;
-  const target = container.scrollTop + delta;
-  const maxScroll = container.scrollHeight - container.clientHeight;
-  const clamped = Math.max(0, Math.min(maxScroll, target));
-  if (Math.abs(container.scrollTop - clamped) > 1) {
-    container.scrollTo({ top: clamped, behavior: 'smooth' });
+  const scroll = container.querySelector('.lyrics-scroll');
+  if (!scroll) return;
+
+  const containerH = container.clientHeight;
+  const linesH = menuLines.length * LINE_H;
+  let y;
+
+  if (linesH <= containerH) {
+    // Short list: keep the whole block centered.
+    y = (containerH - linesH) / 2;
+  } else if (activeIndex >= 0) {
+    // Center the active line, clamped so the first/last lines aren't lost.
+    y = (containerH - LINE_H) / 2 - activeIndex * LINE_H;
+    y = Math.max(containerH - linesH, Math.min(0, y));
+  } else {
+    y = 0;
   }
+
+  scroll.style.transform = `translate3d(0, ${y}px, 0)`;
 }
 
 // ---- UI updates with server data ----
@@ -209,7 +219,7 @@ function renderPlayer(data) {
     } else {
       clearStatus();
       renderLyrics(menuLines);
-      els.lyrics.scrollTop = 0;
+      positionLyrics(-1);
     }
   }
 

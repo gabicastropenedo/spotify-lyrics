@@ -284,12 +284,9 @@ h1 {
   position: relative;
   flex: 1;
   min-height: 0;
-  overflow-y: auto;
-  padding: 40vh 4px;
+  overflow: hidden;
   line-height: 1.6;
   text-align: center;
-  scrollbar-width: none;          /* Firefox */
-  -ms-overflow-style: none;       /* Internet Explorer / Edge */
 }
 
 #lyrics:empty {
@@ -300,10 +297,23 @@ h1 {
   display: none;                  /* Chrome / Safari */
 }
 
+.lyrics-scroll {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  will-change: transform;
+}
+
 .lyric-line {
+  height: 52px;
+  line-height: 52px;
   font-size: 22px;
   font-weight: 500;
-  padding: 6px 0;
+  padding: 0 12px;
   color: var(--text-dim);
   transition: color 0.25s ease, transform 0.25s ease, font-size 0.25s ease, opacity 0.4s ease;
   cursor: default;
@@ -313,6 +323,7 @@ h1 {
   color: var(--text);
   font-size: 26px;
   font-weight: 700;
+  transform: scale(1.04);
 }
 
 .lyric-line:hover {
