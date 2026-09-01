@@ -144,14 +144,21 @@ function updateSync() {
   });
 
   if (activeIndex >= 0) {
-    const active = lyricEls[activeIndex];
-    const container = els.lyrics;
-    const containerMid = container.clientHeight / 2;
-    const activeTop = active.offsetTop - container.offsetTop;
-    container.scrollTo({
-      top: activeTop - containerMid + active.clientHeight / 2,
-      behavior: 'smooth',
-    });
+    centerActiveLine(lyricEls[activeIndex]);
+  }
+}
+
+// Keeps the active line always centered (horizontally via CSS text-align,
+// vertically by scrolling so the line lands in the middle of the container).
+function centerActiveLine(activeEl) {
+  const container = els.lyrics;
+  const containerMid = container.clientHeight / 2;
+  const activeTop = activeEl.offsetTop - container.offsetTop;
+  const target = activeTop - containerMid + activeEl.clientHeight / 2;
+  const maxScroll = container.scrollHeight - container.clientHeight;
+  const clamped = Math.max(0, Math.min(maxScroll, target));
+  if (Math.abs(container.scrollTop - clamped) > 1) {
+    container.scrollTo({ top: clamped, behavior: 'smooth' });
   }
 }
 
