@@ -148,13 +148,17 @@ function updateSync() {
   }
 }
 
-// Keeps the active line always centered (horizontally via CSS text-align,
-// vertically by scrolling so the line lands in the middle of the container).
+// Keeps the active line centered in the visible area between the header
+// and the fixed bottom player bar (not just in the middle of the container).
 function centerActiveLine(activeEl) {
   const container = els.lyrics;
-  const containerMid = container.clientHeight / 2;
-  const activeTop = activeEl.offsetTop - container.offsetTop;
-  const target = activeTop - containerMid + activeEl.clientHeight / 2;
+  const playerBar = els.nowPlaying;
+  const playerBarHeight =
+    playerBar && !playerBar.classList.contains('hidden') ? playerBar.offsetHeight : 0;
+  const desiredCenter = (window.innerHeight - playerBarHeight) / 2;
+  const lineCenter = activeEl.getBoundingClientRect().top + activeEl.clientHeight / 2;
+  const delta = desiredCenter - lineCenter;
+  const target = container.scrollTop + delta;
   const maxScroll = container.scrollHeight - container.clientHeight;
   const clamped = Math.max(0, Math.min(maxScroll, target));
   if (Math.abs(container.scrollTop - clamped) > 1) {
