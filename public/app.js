@@ -30,9 +30,9 @@ let isSynced = false;
 let pollTimer = null;
 let isPlaying = false;
 
-const POLL_INTERVAL = 1000; // cada 1s consulta al servidor para casi-tiempo real
+const POLL_INTERVAL = 1000; // poll the server every 1s for near-real-time updates
 
-// ---- Gestión de sesión (tokens por usuario en localStorage) ----
+// ---- Session management (user tokens in localStorage) ----
 function hasSession() {
   return !!localStorage.getItem('spotify_refresh_token');
 }
@@ -43,7 +43,7 @@ function clearSession() {
   localStorage.removeItem('spotify_expires_at');
 }
 
-// Devuelve un access token válido, refrescándolo si ha expirado.
+// Returns a valid access token, refreshing it when expired.
 async function getAccessToken() {
   const access = localStorage.getItem('spotify_access_token');
   const refresh = localStorage.getItem('spotify_refresh_token');
@@ -69,7 +69,7 @@ async function getAccessToken() {
     localStorage.setItem('spotify_expires_at', String(Date.now() + data.expires_in));
     return data.access_token;
   } catch (err) {
-    console.error('Error refrescando token:', err);
+    console.error('Error refreshing token:', err);
     clearSession();
     return null;
   }
@@ -99,7 +99,7 @@ function showLoading(show) {
   els.loading.classList.toggle('hidden', !show);
 }
 
-// ---- Render de letras ----
+// ---- Lyrics render ----
 function renderLyrics(lines) {
   els.lyrics.innerHTML = '';
   lines.forEach((line, i) => {
@@ -111,7 +111,7 @@ function renderLyrics(lines) {
   });
 }
 
-// ---- Sincronización en tiempo real ----
+// ---- Real-time sync ----
 function updateSync() {
   const lyricEls = els.lyrics.querySelectorAll('.lyric-line');
   if (!isSynced || lyricEls.length === 0) return;
@@ -155,9 +155,9 @@ function updateSync() {
   }
 }
 
-// ---- Actualización de la UI con datos del servidor ----
+// ---- UI updates with server data ----
 function renderPlayer(data) {
-  // No hay ninguna canción cargada (nada en reproducción en Spotify)
+  // No song currently loaded (nothing playing on Spotify)
   if (!data.track) {
     els.nowPlaying.classList.add('hidden');
     showNoTrack(true);
@@ -170,7 +170,7 @@ function renderPlayer(data) {
     return;
   }
 
-  // Hay canción (reproduciéndose o pausada): mantener todo visible
+  // There is a song (playing or paused): keep everything visible
   const track = data.track;
   const trackChanged = track.id !== currentTrackId;
 
@@ -191,7 +191,7 @@ function renderPlayer(data) {
 
     if (menuLines.length === 0) {
       els.lyrics.innerHTML = '';
-      setStatus('Sin letras sincronizadas para esta canción. 😔');
+      setStatus('No synced lyrics found for this song. 😔');
     } else {
       clearStatus();
       renderLyrics(menuLines);
@@ -205,7 +205,7 @@ function renderPlayer(data) {
   els.progressTime.textContent = `${formatTime(data.progress_ms)} / ${formatTime(track.duration_ms)}`;
 
   if (data.playing) {
-    // En reproducción: referencia viva para avanzar la letra en tiempo real.
+    // Playing: live reference to advance the lyrics in real time.
     els.lyrics.dataset.startDate = String(performance.now() - data.progress_ms);
   } else {
     // Pausado: congelar el progreso para que la letra no siga avanzando.
@@ -233,11 +233,11 @@ async function poll() {
     const data = await response.json();
     renderPlayer(data);
   } catch (err) {
-    console.error('Error consultando el servidor:', err);
+    console.error('Error querying the server:', err);
   }
 }
 
-// ---- Control de reproducción (via Web API, sin audio en la web) ----
+// ---- Playback controls (Web API, no audio on the web) ----
 function setPlayState(playing) {
   isPlaying = playing;
   if (els.iconPlay && els.iconPause) {
@@ -263,14 +263,14 @@ async function apiControl(endpoint) {
       return;
     }
     if (response.status === 409) {
-      setStatus('Reproduce algo en Spotify primero para poder controlarlo. 🎧');
+      setStatus('Play something on Spotify first to control it. 🎧');
       return;
     }
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
     clearStatus();
   } catch (err) {
-    console.error('Error en el control:', err);
-    setStatus('Falló el control del reproductor.');
+    console.error('Error in control:', err);
+    setStatus('Could not control the player.');
   }
 }
 
@@ -303,7 +303,7 @@ function applyTheme(theme) {
   }
 }
 
-// ---- Estados de la UI según sesión ----
+// ---- UI states by session ----
 function showLoggedIn() {
   els.loginBtn.classList.add('hidden');
   els.logoutBtn.classList.remove('hidden');
@@ -321,7 +321,7 @@ function showLoggedOut() {
   currentTrackId = null;
   showLoading(false);
   showNoTrack(true);
-  els.noTrack.textContent = 'Conecta tu cuenta de Spotify para ver tus letras.';
+  els.noTrack.textContent = 'Connect your Spotify account to see your lyrics.';
 }
 
 function stopPolling() {
@@ -331,11 +331,11 @@ function stopPolling() {
   }
 }
 
-// ---- Inicialización ----
+// ---- Initialization ----
 async function init() {
   setupTheme();
 
-  // Botón de conectar: obtiene la URL de autorización y redirige
+  // Connect button: fetch the auth URL and redirect
   els.loginBtn.addEventListener('click', async () => {
     try {
       const response = await fetch('/api/auth-url');
@@ -343,12 +343,12 @@ async function init() {
       const data = await response.json();
       window.location.href = data.url;
     } catch (err) {
-      console.error('Error obteniendo URL de autorización:', err);
-      setStatus('No se pudo iniciar la conexión con Spotify.');
+      console.error('Error getting auth URL:', err);
+      setStatus('Could not start the Spotify connection.');
     }
   });
 
-  // Botón de salir (logout)
+  // Logout button
   els.logoutBtn.addEventListener('click', () => {
     clearSession();
     showLoggedOut();
@@ -358,7 +358,7 @@ async function init() {
   const params = new URLSearchParams(window.location.search);
   if (params.get('error')) {
     const error = params.get('error');
-    const msg = error === 'auth_error' ? 'No se pudo iniciar sesión. Inténtalo de nuevo.' : 'Autorización cancelada o fallida.';
+    const msg = error === 'auth_error' ? 'Could not sign in. Try again.' : 'Authorization cancelled or failed.';
     setStatus(msg);
     window.history.replaceState({}, '', window.location.pathname);
   }
@@ -368,7 +368,7 @@ async function init() {
     return;
   }
 
-  // Hay sesión guardada: arrancar el reproductor
+  // Session saved: start the player
   showLoggedIn();
   setupControls();
   showLoading(true);

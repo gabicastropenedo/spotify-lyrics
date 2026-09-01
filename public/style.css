@@ -130,7 +130,7 @@ h1 {
   display: none !important;
 }
 
-/* Barra inferior del reproductor (anclada abajo) */
+/* Bottom player bar (anchored) */
 #now-playing {
   position: fixed;
   left: 0;
@@ -218,7 +218,7 @@ h1 {
   font-variant-numeric: tabular-nums;
 }
 
-/* Controles del reproductor */
+/* Player controls */
 #player-controls {
   display: flex;
   align-items: center;
@@ -295,7 +295,7 @@ h1 {
   color: var(--text);
 }
 
-/* Las líneas "cantadas" (anteriores a la activa) se ocultan */
+/* "Sung" lines (before the active one) are dimmed */
 .lyric-line.sung {
   opacity: 0;
   transform: translateY(-6px);
