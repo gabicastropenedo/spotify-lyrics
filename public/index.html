@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Spotify Lyrics</title>
+  <link rel="icon" type="image/svg+xml" href="favicon.svg" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div id="app">
+    <header>
+      <h1>Spotify Lyrics</h1>
+      <div class="header-actions">
+        <button id="theme-toggle" class="theme-toggle" title="Cambiar modo claro/oscuro" aria-label="Cambiar tema">
+          <svg id="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/></svg>
+          <svg id="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" class="hidden"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+        </button>
+        <button id="login-btn" class="hidden">Conectar con Spotify</button>
+      </div>
+      <div id="status" class="hidden"></div>
+    </header>
+
+    <main>
+      <div id="lyrics-container">
+        <p id="no-track-message" class="message hidden">
+          No hay ninguna canción en reproducción. Reproduce algo en Spotify.
+        </p>
+        <p id="loading-message" class="message hidden">Cargando letras…</p>
+        <div id="lyrics"></div>
+      </div>
+    </main>
+  </div>
+
+  <div id="now-playing" class="hidden">
+    <div id="player-visual">
+      <img id="cover" alt="Portada del álbum" />
+      <div id="track-info">
+        <div id="track-name"></div>
+        <div id="track-artist"></div>
+        <div id="progress-wrap">
+          <div id="progress-line"></div>
+          <span id="progress-time"></span>
+        </div>
+      </div>
+      <div id="player-controls">
+        <button id="btn-prev" class="ctl-btn" title="Anterior" aria-label="Anterior">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 17 6 12l5-5"/><path d="M18 17l-5-5 5-5"/></svg>
+        </button>
+        <button id="btn-play" class="ctl-btn ctl-main" title="Play/Pausa" aria-label="Play/Pausa">
+          <svg id="icon-play" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
+          <svg id="icon-pause" viewBox="0 0 24 24" fill="currentColor" class="hidden"><path d="M6 5h4v14H6zM14 5h4v14h-4z"/></svg>
+        </button>
+        <button id="btn-next" class="ctl-btn" title="Siguiente" aria-label="Siguiente">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m13 17 5-5-5-5"/><path d="M6 17l5-5-5-5"/></svg>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
