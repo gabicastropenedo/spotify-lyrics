@@ -2,6 +2,7 @@ const $ = (sel) => document.querySelector(sel);
 
 const els = {
   loginBtn: $('#login-btn'),
+  logoutBtn: $('#logout-btn'),
   status: $('#status'),
   themeToggle: $('#theme-toggle'),
   iconSun: $('#icon-sun'),
@@ -30,6 +31,49 @@ let pollTimer = null;
 let isPlaying = false;
 
 const POLL_INTERVAL = 1000; // cada 1s consulta al servidor para casi-tiempo real
+
+// ---- Gestión de sesión (tokens por usuario en localStorage) ----
+function hasSession() {
+  return !!localStorage.getItem('spotify_refresh_token');
+}
+
+function clearSession() {
+  localStorage.removeItem('spotify_access_token');
+  localStorage.removeItem('spotify_refresh_token');
+  localStorage.removeItem('spotify_expires_at');
+}
+
+// Devuelve un access token válido, refrescándolo si ha expirado.
+async function getAccessToken() {
+  const access = localStorage.getItem('spotify_access_token');
+  const refresh = localStorage.getItem('spotify_refresh_token');
+  const expiresAt = Number(localStorage.getItem('spotify_expires_at') || 0);
+
+  if (access && refresh && Date.now() < expiresAt - 30000) {
+    return access;
+  }
+
+  if (!refresh) {
+    return null;
+  }
+
+  // Pedir un access token nuevo usando el refresh token
+  try {
+    const response = await fetch('/api/token', {
+      method: 'POST',
+      headers: { 'x-refresh-token': refresh },
+    });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    const data = await response.json();
+    localStorage.setItem('spotify_access_token', data.access_token);
+    localStorage.setItem('spotify_expires_at', String(Date.now() + data.expires_in));
+    return data.access_token;
+  } catch (err) {
+    console.error('Error refrescando token:', err);
+    clearSession();
+    return null;
+  }
+}
 
 function formatTime(ms) {
   const totalSec = Math.max(0, Math.floor(ms / 1000));
@@ -171,11 +215,18 @@ function renderPlayer(data) {
 
 // ---- Polling al servidor ----
 async function poll() {
+  const accessToken = await getAccessToken();
+  if (!accessToken) {
+    showLoggedOut();
+    return;
+  }
   try {
-    const response = await fetch('/api/player');
+    const response = await fetch('/api/player', {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
     if (response.status === 401) {
-      // Sesión expirada / no autorizado
-      location.reload();
+      clearSession();
+      showLoggedOut();
       return;
     }
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
@@ -196,10 +247,19 @@ function setPlayState(playing) {
 }
 
 async function apiControl(endpoint) {
+  const accessToken = await getAccessToken();
+  if (!accessToken) {
+    showLoggedOut();
+    return;
+  }
   try {
-    const response = await fetch(endpoint, { method: 'POST' });
+    const response = await fetch(endpoint, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
     if (response.status === 401) {
-      location.reload();
+      clearSession();
+      showLoggedOut();
       return;
     }
     if (response.status === 409) {
@@ -243,36 +303,78 @@ function applyTheme(theme) {
   }
 }
 
-// ---- Inicialización ----
-async function init() {
-  setupTheme();
-  try {
-    const statusResponse = await fetch('/api/status');
-    const status = await statusResponse.json();
+// ---- Estados de la UI según sesión ----
+function showLoggedIn() {
+  els.loginBtn.classList.add('hidden');
+  els.logoutBtn.classList.remove('hidden');
+  clearStatus();
+}
 
-    if (status.authorized) {
-      els.loginBtn.classList.add('hidden');
-      showLoading(true);
-      setupControls();
-      poll();
-      pollTimer = setInterval(poll, POLL_INTERVAL);
-      // Animación de sincronización continua
-      setInterval(updateSync, 100);
-    } else {
-      els.loginBtn.classList.remove('hidden');
-      showNoTrack(true);
-      els.loginBtn.textContent = 'Conectar con Spotify';
-    }
-  } catch (err) {
-    console.error('Error al inicializar:', err);
-    setStatus('No se pudo contactar al servidor. ¿Está corriendo?');
-    showNoTrack(true);
+function showLoggedOut() {
+  stopPolling();
+  els.loginBtn.classList.remove('hidden');
+  els.logoutBtn.classList.add('hidden');
+  els.nowPlaying.classList.add('hidden');
+  els.lyrics.innerHTML = '';
+  menuLines = [];
+  isSynced = false;
+  currentTrackId = null;
+  showLoading(false);
+  showNoTrack(true);
+  els.noTrack.textContent = 'Conecta tu cuenta de Spotify para ver tus letras.';
+}
+
+function stopPolling() {
+  if (pollTimer) {
+    clearInterval(pollTimer);
+    pollTimer = null;
   }
 }
 
-// El botón de login siempre va a /login (el servidor redirige a Spotify)
-els.loginBtn.addEventListener('click', () => {
-  window.location.href = '/login';
-});
+// ---- Inicialización ----
+async function init() {
+  setupTheme();
 
-init();
+  // Botón de conectar: obtiene la URL de autorización y redirige
+  els.loginBtn.addEventListener('click', async () => {
+    try {
+      const response = await fetch('/api/auth-url');
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      const data = await response.json();
+      window.location.href = data.url;
+    } catch (err) {
+      console.error('Error obteniendo URL de autorización:', err);
+      setStatus('No se pudo iniciar la conexión con Spotify.');
+    }
+  });
+
+  // Botón de salir (logout)
+  els.logoutBtn.addEventListener('click', () => {
+    clearSession();
+    showLoggedOut();
+  });
+
+  // Si el usuario viene del callback con error, mostrarlo
+  const params = new URLSearchParams(window.location.search);
+  if (params.get('error')) {
+    const error = params.get('error');
+    const msg = error === 'auth_error' ? 'No se pudo iniciar sesión. Inténtalo de nuevo.' : 'Autorización cancelada o fallida.';
+    setStatus(msg);
+    window.history.replaceState({}, '', window.location.pathname);
+  }
+
+  if (!hasSession()) {
+    showLoggedOut();
+    return;
+  }
+
+  // Hay sesión guardada: arrancar el reproductor
+  showLoggedIn();
+  setupControls();
+  showLoading(true);
+  poll();
+  pollTimer = setInterval(poll, POLL_INTERVAL);
+  setInterval(updateSync, 100);
+}
+
+document.addEventListener('DOMContentLoaded', init);

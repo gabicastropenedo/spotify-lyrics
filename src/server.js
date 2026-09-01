@@ -5,7 +5,6 @@ import dotenv from 'dotenv';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import os from 'os';
-import fs from 'fs';
 
 const USER_AGENT =
   'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
@@ -48,42 +47,8 @@ if (!CLIENT_ID || !CLIENT_SECRET) {
 const app = express();
 app.use(express.static(path.join(__dirname, '..', 'public')));
 
-// Persistencia de sesión (para sobrevivir a reinicios del servidor)
-const SESSION_FILE = path.join(__dirname, '..', '.session.json');
-
-function loadSession() {
-  try {
-    if (fs.existsSync(SESSION_FILE)) {
-      const raw = fs.readFileSync(SESSION_FILE, 'utf8');
-      return JSON.parse(raw);
-    }
-  } catch (err) {
-    console.error('No se pudo leer la sesión guardada:', err.message);
-  }
-  return null;
-}
-
-function saveSession(tokens) {
-  try {
-    fs.writeFileSync(SESSION_FILE, JSON.stringify(tokens, null, 2));
-  } catch (err) {
-    console.error('No se pudo guardar la sesión:', err.message);
-  }
-}
-
-// Estado del usuario (persistido en disco)
-let userTokens = loadSession();
-
-function setUserTokens(tokens) {
-  userTokens = tokens;
-  if (tokens) {
-    saveSession(tokens);
-  } else {
-    try { fs.unlinkSync(SESSION_FILE); } catch {}
-  }
-}
-
-// Caché de letras por track (evita reconsultar en cada poll)
+// Caché de letras por track (evita reconsultar en cada poll). Es global porque
+// las letras de una canción son iguales para todos los usuarios.
 let lyricsCache = {}; // { trackId: { data, at } }
 
 function buildAuthUrl() {
@@ -94,89 +59,105 @@ function buildAuthUrl() {
     scope: SCOPES,
     redirect_uri: REDIRECT_URI,
     state,
-    show_dialog: 'false',
+    show_dialog: 'true', // permitir elegir cuenta al conectar
   });
   return `https://accounts.spotify.com/authorize?${params.toString()}#STATE=${state}`;
 }
 
-// ---- Rutas de autenticación ----
+async function exchangeCode(code) {
+  const tokenResponse = await axios.post(
+    'https://accounts.spotify.com/api/token',
+    new URLSearchParams({
+      grant_type: 'authorization_code',
+      code,
+      redirect_uri: REDIRECT_URI,
+    }),
+    {
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+        Authorization: 'Basic ' + Buffer.from(`${CLIENT_ID}:${CLIENT_SECRET}`).toString('base64'),
+      },
+    }
+  );
+  return tokenResponse.data;
+}
 
-app.get('/login', (req, res) => {
-  res.redirect(buildAuthUrl());
+async function refreshAccessToken(refreshToken) {
+  const tokenResponse = await axios.post(
+    'https://accounts.spotify.com/api/token',
+    new URLSearchParams({
+      grant_type: 'refresh_token',
+      refresh_token: refreshToken,
+    }),
+    {
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+        Authorization: 'Basic ' + Buffer.from(`${CLIENT_ID}:${CLIENT_SECRET}`).toString('base64'),
+      },
+    }
+  );
+  return tokenResponse.data;
+}
+
+// ---- Rutas de autenticación (multi-tenant: cada usuario guarda sus tokens) ----
+
+// Devuelve la URL de autorización para que el frontend redirija al usuario
+app.get('/api/auth-url', (req, res) => {
+  res.json({ url: buildAuthUrl() });
 });
 
+// Spotify redirige aquí tras el consentimiento. Intercambia el code por tokens
+// y devuelve un HTML mínimo que guarda los tokens en localStorage del navegador
+// y redirige a la app. Así el refresh token no queda en el historial de URLs.
 app.get('/callback', async (req, res) => {
   const { code, error } = req.query;
   if (error) {
-    return res.status(400).send(`Error de autorización: ${error}. <a href="/login">Intentar de nuevo</a>`);
+    return res.redirect(`/?error=${encodeURIComponent(error)}`);
   }
 
+  let tokens;
   try {
-    const tokenResponse = await axios.post(
-      'https://accounts.spotify.com/api/token',
-      new URLSearchParams({
-        grant_type: 'authorization_code',
-        code,
-        redirect_uri: REDIRECT_URI,
-      }),
-      {
-        headers: {
-          'Content-Type': 'application/x-www-form-urlencoded',
-          Authorization: 'Basic ' + Buffer.from(`${CLIENT_ID}:${CLIENT_SECRET}`).toString('base64'),
-        },
-      }
-    );
-
-    setUserTokens(tokenResponse.data);
-    res.redirect('/');
+    tokens = await exchangeCode(code);
   } catch (err) {
     console.error('Error al intercambiar el código:', err.response?.data || err.message);
-    res.status(500).send('Error al obtener el token. <a href="/login">Intentar de nuevo</a>');
+    return res.redirect('/?error=auth_error');
   }
+
+  const access_token = tokens.access_token || '';
+  const refresh_token = tokens.refresh_token || '';
+  const expires_in = (Number(tokens.expires_in) || 3600) * 1000;
+
+  const html = `<!DOCTYPE html><html><body><script>
+    try {
+      localStorage.setItem('spotify_access_token', ${JSON.stringify(access_token)});
+      localStorage.setItem('spotify_refresh_token', ${JSON.stringify(refresh_token)});
+      localStorage.setItem('spotify_expires_at', String(Date.now() + ${expires_in}));
+    } catch (e) {}
+    location.replace('/');
+  </script></body></html>`;
+  res.send(html);
 });
 
-// ---- Middleware ----
-
-async function getAccessToken() {
-  if (!userTokens) return null;
-  const { access_token, refresh_token, expires_at } = userTokens;
-
-  if (Date.now() < expires_at) {
-    return access_token;
+// Dado un refresh_token, devuelve un access_token nuevo (para refrescar la sesión)
+app.post('/api/token', async (req, res) => {
+  const refresh = req.headers['x-refresh-token'];
+  if (!refresh) {
+    return res.status(400).json({ error: 'missing_refresh_token' });
   }
-
   try {
-    const refreshResponse = await axios.post(
-      'https://accounts.spotify.com/api/token',
-      new URLSearchParams({
-        grant_type: 'refresh_token',
-        refresh_token,
-      }),
-      {
-        headers: {
-          'Content-Type': 'application/x-www-form-urlencoded',
-          Authorization: 'Basic ' + Buffer.from(`${CLIENT_ID}:${CLIENT_SECRET}`).toString('base64'),
-        },
-      }
-    );
-
-    userTokens.access_token = refreshResponse.data.access_token;
-    userTokens.expires_at = Date.now() + refreshResponse.data.expires_in * 1000;
-    saveSession(userTokens);
-    return userTokens.access_token;
+    const data = await refreshAccessToken(refresh);
+    res.json({
+      access_token: data.access_token,
+      expires_in: (Number(data.expires_in) || 3600) * 1000,
+    });
   } catch (err) {
-    console.error('Error al refrescar el token:', err.response?.data || err.message);
-    setUserTokens(null);
-    return null;
+    if (err.response?.status === 400 || err.response?.status === 401) {
+      return res.status(401).json({ error: 'invalid_refresh_token' });
+    }
+    console.error('Error al refrescar token:', err.response?.data || err.message);
+    res.status(500).json({ error: 'server_error' });
   }
-}
-
-function requireAuth(req, res, next) {
-  if (!userTokens) {
-    return res.status(401).json({ error: 'not_authorized' });
-  }
-  next();
-}
+});
 
 // ---- Letras (LRCLIB) ----
 // LRCLIB es una biblioteca abierta y gratuita (sin API key ni registro) que
@@ -202,7 +183,7 @@ function parseLRC(lrc) {
 }
 
 // Busca letras por nombre de canción/artista/álbum y duración.
-async function fetchLyrics(track, userAccessToken) {
+async function fetchLyrics(track) {
   try {
     const params = new URLSearchParams({
       track_name: track.name,
@@ -216,7 +197,6 @@ async function fetchLyrics(track, userAccessToken) {
       timeout: 8000,
     });
 
-    // Primero usar letras sincronizadas (timestamps); fallback a las estáticas.
     const synced = data?.syncedLyrics || null;
     const plain = data?.plainLyrics || null;
     if (!synced && !plain) {
@@ -245,19 +225,30 @@ async function fetchLyrics(track, userAccessToken) {
   }
 }
 
+// ---- Middleware de autenticación por token del usuario ----
+// El navegador envía el access_token del usuario en el header Authorization.
+function getBearerToken(req) {
+  const auth = req.headers['authorization'] || '';
+  if (auth.startsWith('Bearer ')) {
+    return auth.slice(7);
+  }
+  return null;
+}
+
 // ---- API ----
 
 app.get('/api/status', (req, res) => {
-  res.json({ authorized: !!userTokens });
+  // La app siempre está "lista"; el frontend decide si hay sesión por localStorage.
+  res.json({ ok: true });
 });
 
-app.get('/api/player', requireAuth, async (req, res) => {
-  try {
-    const accessToken = await getAccessToken();
-    if (!accessToken) {
-      return res.status(401).json({ error: 'not_authorized' });
-    }
+app.get('/api/player', async (req, res) => {
+  const accessToken = getBearerToken(req);
+  if (!accessToken) {
+    return res.status(401).json({ error: 'not_authorized' });
+  }
 
+  try {
     const playerResponse = await axios.get('https://api.spotify.com/v1/me/player/currently-playing', {
       headers: { Authorization: `Bearer ${accessToken}` },
     });
@@ -284,9 +275,8 @@ app.get('/api/player', requireAuth, async (req, res) => {
     // Obtener letras (con caché por track para no repetir en cada poll)
     let lyricsData = lyricsCache[item.id];
     if (!lyricsData || Date.now() - lyricsData.at > 60 * 60 * 1000) {
-      response.lyrics = await fetchLyrics(response.track, accessToken);
+      response.lyrics = await fetchLyrics(response.track);
       lyricsCache[item.id] = { data: response.lyrics, at: Date.now() };
-      // Limitar el crecimiento de la caché
       if (Object.keys(lyricsCache).length > 50) lyricsCache = {};
     } else {
       response.lyrics = lyricsData.data;
@@ -305,11 +295,11 @@ app.get('/api/player', requireAuth, async (req, res) => {
 // ---- Endpoints de control de reproducción (Web API) ----
 // Controla el dispositivo Spotify donde esté sonando, SIN reproducir audio en la web.
 
-app.post('/api/player/play', requireAuth, async (req, res) => {
-  try {
-    const accessToken = await getAccessToken();
-    if (!accessToken) return res.status(401).json({ error: 'not_authorized' });
+app.post('/api/player/play', async (req, res) => {
+  const accessToken = getBearerToken(req);
+  if (!accessToken) return res.status(401).json({ error: 'not_authorized' });
 
+  try {
     await axios.put(
       'https://api.spotify.com/v1/me/player/play',
       {},
@@ -321,11 +311,11 @@ app.post('/api/player/play', requireAuth, async (req, res) => {
   }
 });
 
-app.post('/api/player/pause', requireAuth, async (req, res) => {
-  try {
-    const accessToken = await getAccessToken();
-    if (!accessToken) return res.status(401).json({ error: 'not_authorized' });
+app.post('/api/player/pause', async (req, res) => {
+  const accessToken = getBearerToken(req);
+  if (!accessToken) return res.status(401).json({ error: 'not_authorized' });
 
+  try {
     await axios.put(
       'https://api.spotify.com/v1/me/player/pause',
       {},
@@ -337,11 +327,11 @@ app.post('/api/player/pause', requireAuth, async (req, res) => {
   }
 });
 
-app.post('/api/player/next', requireAuth, async (req, res) => {
-  try {
-    const accessToken = await getAccessToken();
-    if (!accessToken) return res.status(401).json({ error: 'not_authorized' });
+app.post('/api/player/next', async (req, res) => {
+  const accessToken = getBearerToken(req);
+  if (!accessToken) return res.status(401).json({ error: 'not_authorized' });
 
+  try {
     await axios.post(
       'https://api.spotify.com/v1/me/player/next',
       {},
@@ -353,11 +343,11 @@ app.post('/api/player/next', requireAuth, async (req, res) => {
   }
 });
 
-app.post('/api/player/previous', requireAuth, async (req, res) => {
-  try {
-    const accessToken = await getAccessToken();
-    if (!accessToken) return res.status(401).json({ error: 'not_authorized' });
+app.post('/api/player/previous', async (req, res) => {
+  const accessToken = getBearerToken(req);
+  if (!accessToken) return res.status(401).json({ error: 'not_authorized' });
 
+  try {
     await axios.post(
       'https://api.spotify.com/v1/me/player/previous',
       {},
@@ -369,29 +359,7 @@ app.post('/api/player/previous', requireAuth, async (req, res) => {
   }
 });
 
-app.put('/api/player/volume', requireAuth, async (req, res) => {
-  try {
-    const accessToken = await getAccessToken();
-    if (!accessToken) return res.status(401).json({ error: 'not_authorized' });
-
-    const volume = Math.max(0, Math.min(100, Number(req.query.volume)));
-    if (Number.isNaN(volume)) {
-      return res.status(400).json({ error: 'invalid_volume' });
-    }
-
-    await axios.put(
-      `https://api.spotify.com/v1/me/player/volume?volume_percent=${volume}`,
-      {},
-      { headers: { Authorization: `Bearer ${accessToken}` } }
-    );
-    res.json({ ok: true });
-  } catch (err) {
-    handlePlayerError(err, res);
-  }
-});
-
 function handlePlayerError(err, res) {
-  // 404 (NO_ACTIVE_DEVICE) o 403 => no hay dispositivo reproduciendo
   if (err.response?.status === 404 && err.response?.data?.error?.reason === 'NO_ACTIVE_DEVICE') {
     return res.status(409).json({ error: 'no_device' });
   }
