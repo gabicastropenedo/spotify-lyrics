@@ -40,15 +40,15 @@ const BASE_URL = process.env.BASE_URL || `http://${HOST}:${PORT}`;
 const REDIRECT_URI = `${BASE_URL}/callback`;
 
 if (!CLIENT_ID || !CLIENT_SECRET) {
-  console.error('ERROR: Faltan SPOTIFY_CLIENT_ID o SPOTIFY_CLIENT_SECRET. Revisa el archivo .env');
+  console.error('ERROR: Missing SPOTIFY_CLIENT_ID or SPOTIFY_CLIENT_SECRET. Check the .env file');
   process.exit(1);
 }
 
 const app = express();
 app.use(express.static(path.join(__dirname, '..', 'public')));
 
-// Caché de letras por track (evita reconsultar en cada poll). Es global porque
-// las letras de una canción son iguales para todos los usuarios.
+// Lyrics cache per track (avoids re-querying on every poll). It's global because
+// the lyrics of a song are the same for all users.
 let lyricsCache = {}; // { trackId: { data, at } }
 
 function buildAuthUrl() {
@@ -99,16 +99,17 @@ async function refreshAccessToken(refreshToken) {
   return tokenResponse.data;
 }
 
-// ---- Rutas de autenticación (multi-tenant: cada usuario guarda sus tokens) ----
+// ---- Auth routes (multi-tenant: each user stores their own tokens) ----
 
-// Devuelve la URL de autorización para que el frontend redirija al usuario
+// Returns the authorization URL for the frontend to redirect the user
 app.get('/api/auth-url', (req, res) => {
   res.json({ url: buildAuthUrl() });
 });
 
-// Spotify redirige aquí tras el consentimiento. Intercambia el code por tokens
-// y devuelve un HTML mínimo que guarda los tokens en localStorage del navegador
-// y redirige a la app. Así el refresh token no queda en el historial de URLs.
+// Spotify redirects here after consent. Exchanges the code for tokens
+// and returns a minimal HTML page that stores the tokens in the browser's
+// localStorage and then redirects to the app. The refresh token never
+// appears in the URL history.
 app.get('/callback', async (req, res) => {
   const { code, error } = req.query;
   if (error) {
@@ -119,7 +120,7 @@ app.get('/callback', async (req, res) => {
   try {
     tokens = await exchangeCode(code);
   } catch (err) {
-    console.error('Error al intercambiar el código:', err.response?.data || err.message);
+    console.error('Error exchanging the code:', err.response?.data || err.message);
     return res.redirect('/?error=auth_error');
   }
 
@@ -138,7 +139,7 @@ app.get('/callback', async (req, res) => {
   res.send(html);
 });
 
-// Dado un refresh_token, devuelve un access_token nuevo (para refrescar la sesión)
+// Given a refresh_token, returns a new access token (to refresh the session)
 app.post('/api/token', async (req, res) => {
   const refresh = req.headers['x-refresh-token'];
   if (!refresh) {
@@ -154,18 +155,18 @@ app.post('/api/token', async (req, res) => {
     if (err.response?.status === 400 || err.response?.status === 401) {
       return res.status(401).json({ error: 'invalid_refresh_token' });
     }
-    console.error('Error al refrescar token:', err.response?.data || err.message);
+    console.error('Error refreshing token:', err.response?.data || err.message);
     res.status(500).json({ error: 'server_error' });
   }
 });
 
-// ---- Letras (LRCLIB) ----
-// LRCLIB es una biblioteca abierta y gratuita (sin API key ni registro) que
-// agrega letras sincronizadas (formato LRC) desde múltiples fuentes. Es estable
-// y no depende de secretos rotatorios de Spotify.
+// ---- Lyrics (LRCLIB) ----
+// LRCLIB is an open, free library (no API key or signup) that aggregates
+// synchronized lyrics (LRC format) from multiple sources. It's stable
+// and doesn't depend on rotating Spotify secrets.
 const LRCLIB_BASE = 'https://lrclib.net/api';
 
-// Parsea una letra en formato LRC ("[mm:ss.xx] texto") a líneas con timestamp.
+// Parses lyrics in LRC format ("[mm:ss.xx] text") into lines with timestamps.
 function parseLRC(lrc) {
   const lines = [];
   const lineRegex = /\[(\d{1,2}):(\d{2})(?:[.:](\d{1,3}))?\]\s*(.*)/;
@@ -182,7 +183,7 @@ function parseLRC(lrc) {
   return lines;
 }
 
-// Busca letras por nombre de canción/artista/álbum y duración.
+// Looks up lyrics by song/artist/album name and duration.
 async function fetchLyrics(track) {
   try {
     const params = new URLSearchParams({
@@ -217,16 +218,16 @@ async function fetchLyrics(track) {
       return { synced: false, lines: [], error: 'no_lyrics' };
     }
     if (err.response?.status === 429) {
-      console.error('LRCLIB rate-limit alcanzado.');
+      console.error('LRCLIB rate limit reached.');
       return { synced: false, lines: [], error: 'rate_limited' };
     }
-    console.error('Error obteniendo lyrics (LRCLIB):', err.response?.status || err.message);
+    console.error('Error fetching lyrics (LRCLIB):', err.response?.status || err.message);
     return { synced: false, lines: [], error: 'unavailable' };
   }
 }
 
-// ---- Middleware de autenticación por token del usuario ----
-// El navegador envía el access_token del usuario en el header Authorization.
+// ---- Auth middleware by user token ----
+// The browser sends the user's access_token in the Authorization header.
 function getBearerToken(req) {
   const auth = req.headers['authorization'] || '';
   if (auth.startsWith('Bearer ')) {
@@ -238,7 +239,7 @@ function getBearerToken(req) {
 // ---- API ----
 
 app.get('/api/status', (req, res) => {
-  // La app siempre está "lista"; el frontend decide si hay sesión por localStorage.
+  // The app is always "ready"; the frontend decides when there's a session (localStorage).
   res.json({ ok: true });
 });
 
@@ -253,7 +254,7 @@ app.get('/api/player', async (req, res) => {
       headers: { Authorization: `Bearer ${accessToken}` },
     });
 
-    // 204 = no hay canción en reproducción
+    // 204 = no song currently playing
     if (!playerResponse.data || !playerResponse.data.item) {
       return res.json({ playing: false });
     }
@@ -272,7 +273,7 @@ app.get('/api/player', async (req, res) => {
       },
     };
 
-    // Obtener letras (con caché por track para no repetir en cada poll)
+    // Get lyrics (with per-track cache to avoid re-querying on every poll)
     let lyricsData = lyricsCache[item.id];
     if (!lyricsData || Date.now() - lyricsData.at > 60 * 60 * 1000) {
       response.lyrics = await fetchLyrics(response.track);
@@ -287,13 +288,13 @@ app.get('/api/player', async (req, res) => {
     if (err.response?.status === 401) {
       return res.status(401).json({ error: 'not_authorized' });
     }
-    console.error('Error en /api/player:', err.response?.data || err.message);
+    console.error('Error in /api/player:', err.response?.data || err.message);
     res.status(500).json({ error: 'server_error' });
   }
 });
 
-// ---- Endpoints de control de reproducción (Web API) ----
-// Controla el dispositivo Spotify donde esté sonando, SIN reproducir audio en la web.
+// ---- Playback control endpoints (Web API) ----
+// Controls the Spotify device where the music is playing, WITHOUT playing audio on the web.
 
 app.post('/api/player/play', async (req, res) => {
   const accessToken = getBearerToken(req);
@@ -366,11 +367,11 @@ function handlePlayerError(err, res) {
   if (err.response?.status === 401) {
     return res.status(401).json({ error: 'not_authorized' });
   }
-  console.error('Error en control reproductor:', err.response?.data || err.message);
+  console.error('Error in player controls:', err.response?.data || err.message);
   res.status(500).json({ error: 'server_error' });
 }
 
 app.listen(PORT, () => {
-  console.log(`Servidor de Spotify Lyrics en: ${BASE_URL}`);
-  console.log(`REDIRECT_URI para tu app de Spotify Dashboard: ${REDIRECT_URI}`);
+  console.log(`Spotify Lyrics server running at: ${BASE_URL}`);
+  console.log(`REDIRECT_URI for your Spotify Dashboard app: ${REDIRECT_URI}`);
 });

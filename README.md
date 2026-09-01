@@ -1,138 +1,153 @@
-# Spotify Lyrics — Letras en tiempo real para Tesla
+# Spotify Lyrics — Real-time lyrics for your Tesla
 
-Reproductor web de Spotify que muestra letras sincronizadas en tiempo real con controles de play/pause, diseñado para usarse desde el navegador del Tesla.
+Web Spotify player that shows real-time synchronized lyrics with play/pause controls, designed to be used from the Tesla browser.
 
-## Arquitectura
+## Architecture
 
 ```
 spotify-lyrics/
 ├── src/
-│   └── server.js        # Backend Express (auth + proxy Spotify + letras LRCLIB)
+│   └── server.js        # Express backend (OAuth + Spotify proxy + LRCLIB lyrics)
 ├── public/
-│   ├── index.html        # UI principal
-│   ├── style.css         # Estilos (tema Tesla oscuro/claro)
-│   ├── app.js            # Lógica frontend (polling, sync, controles)
-│   └── favicon.svg       # Icono del proyecto
-├── .env                  # Credenciales (no commitear)
-├── .env.example          # Plantilla de .env
-├── .session.json         # Token de sesión persistido (no commitear)
-└── package.json          # Dependencias: express, axios, dotenv
+│   ├── index.html        # Main UI
+│   ├── style.css         # Styles (Tesla dark/light theme)
+│   ├── app.js            # Frontend logic (polling, sync, controls)
+│   └── favicon.svg       # Project icon
+├── .env                  # Credentials (never commit)
+├── .env.example          # .env template
+└── package.json          # Dependencies: express, axios, dotenv
 ```
 
 ## Stack
 
-- **Backend**: Node.js + Express, Authorization Code Flow de Spotify
-- **Frontend**: HTML/CSS/JS vanilla (sin framework)
-- **Letras**: API de LRCLIB (gratis, abierta, sin API key — https://lrclib.net)
-- **Expose local**: Cloudflare Tunnel (cloudflared) para acceso HTTPS desde el Tesla
+- **Backend**: Node.js + Express, Spotify Authorization Code Flow
+- **Frontend**: vanilla HTML/CSS/JS (no framework)
+- **Lyrics**: LRCLIB API (free, open, no API key — https://lrclib.net)
+- **Local exposure**: Cloudflare Tunnel (cloudflared) for HTTPS access from Tesla
+- **Hosting**: Railway (free tier), see [Deployment](#deployment)
 
-## Dependencias
+## Dependencies
 
 ```bash
-npm install   # Instala express, axios, dotenv (84 paquetes)
+npm install   # Installs express, axios, dotenv
 ```
 
-## Configuración
+## Configuration
 
-### 1. Crear app en Spotify Developer Dashboard
+### 1. Create an app in the Spotify Developer Dashboard
 
-1. Ir a https://developer.spotify.com/dashboard
-2. Crear app → nombre libre
-3. En **Edit Settings → Redirect URIs** añadir la URL de callback:
-   - Local: `http://127.0.0.1:3000/callback` (obligatorio usar `127.0.0.1`, NO `localhost`)
-   - Remoto (Cloudflare Tunnel): `https://<tu-url>.trycloudflare.com/callback`
-4. Copiar **Client ID** y **Client Secret**
+1. Go to https://developer.spotify.com/dashboard
+2. Create app → any name
+3. In **Edit Settings → Redirect URIs** add the callback URL:
+   - Local: `http://127.0.0.1:3000/callback` (must use `127.0.0.1`, NOT `localhost`)
+   - Remote (Cloudflare Tunnel): `https://<your-url>.trycloudflare.com/callback`
+   - Remote (Railway): `https://<your-app>.up.railway.app/callback`
+4. Copy **Client ID** and **Client Secret**
 
-### 2. Crear `.env`
+### 2. Create `.env`
 
 ```bash
 cp .env.example .env
 ```
 
-Rellenar con las credenciales:
+Fill in the credentials:
 ```
-SPOTIFY_CLIENT_ID=eb67925702774745b03858956b041bb5
-SPOTIFY_CLIENT_SECRET=dd9bf1bd7088410b80dcda7e27984892
+SPOTIFY_CLIENT_ID=your_client_id
+SPOTIFY_CLIENT_SECRET=your_client_secret
 PORT=3000
 ```
 
-## Ejecutar en local
+## Run locally
 
 ```bash
 node src/server.js
 ```
 
-- Servidor en http://127.0.0.1:3000
-- Abrir en navegador, hacer login con Spotify
-- La sesión se guarda en `.session.json` (sobrevive reinicios del servidor)
+- Server at http://127.0.0.1:3000
+- Open in a browser and sign in with Spotify
+- Each user's tokens are stored in their browser's `localStorage` (multi-tenant)
 
-## Exponer para el Tesla (Cloudflare Tunnel)
+## Deployment (Railway)
 
-1. Descargar cloudflared: https://developers.cloudflare.com/tunnel/downloads/
-2. Guardar el ejecutable en una carpeta estable
-3. Arrancar el túnel:
+1. Push the repo to GitHub and create a Railway project from it, or use `railway up`.
+2. Set the environment variables `SPOTIFY_CLIENT_ID`, `SPOTIFY_CLIENT_SECRET`, `PORT=3000` and `BASE_URL=https://<your-app>.up.railway.app` in the Railway dashboard.
+3. Add `https://<your-app>.up.railway.app/callback` to the Redirect URIs in the Spotify Developer Dashboard.
+4. The service runs `npm start` (`node src/server.js`).
+
+Live app: https://spotify-lyrics-production.up.railway.app
+
+## Expose for Tesla (Cloudflare Tunnel)
+
+1. Download cloudflared: https://developers.cloudflare.com/tunnel/downloads/
+2. Keep the binary in a stable folder
+3. Start the tunnel:
 
 ```bash
 cloudflared tunnel --url http://127.0.0.1:3000 --no-autoupdate
 ```
 
-4. Copiar la URL `https://xxx.trycloudflare.com` que aparece
-5. Si es la primera vez: registrar la URL como redirect en Spotify Dashboard
-6. Abrir la URL en el navegador del Tesla
+4. Copy the `https://xxx.trycloudflare.com` URL it prints
+5. If it's the first time: add the URL as a redirect in the Spotify Dashboard
+6. Open the URL in the Tesla browser
 
-**Nota**: la URL de trycloudflare.com es temporal y cambia al reiniciar cloudflared. La sesión del servidor persiste, así que si ya autorizaste antes, las letras funcionan sin re-autenticar.
+**Note**: the trycloudflare.com URL is temporary and changes when cloudflared restarts. Each user's session lives in their browser's localStorage, so they don't need to re-authenticate as long as they use the same browser.
 
-Para cerrar:
+To stop:
 - `Get-Process node,cloudflared | Stop-Process -Force`
 
-## Cómo funciona
+## How it works
 
 ### Auth (server.js)
 
-- Authorization Code Flow con scopes: `user-read-playback-state`, `user-read-currently-playing`, `user-modify-playback-state`
-- El refresh token no expira → una vez autenticado, no necesita re-login
-- Token de acceso se renueva automáticamente vía refresh
+- Multi-tenant: each user signs into Spotify with their own account.
+- Authorization Code Flow with scopes: `user-read-playback-state`, `user-read-currently-playing`, `user-modify-playback-state`.
+- `GET /api/auth-url` returns the Spotify authorization URL.
+- `GET /callback` exchanges the code and serves a tiny HTML page that stores the tokens in the browser's `localStorage` (the refresh token never passes through the URL/history).
+- `POST /api/token` exchanges a user's refresh token for a new access token (the Client Secret stays on the server).
+- The refresh token doesn't expire → once authenticated, no re-login needed.
+- The access token is renewed automatically on the frontend when it expires.
 
-### Letras (LRCLIB)
+### Lyrics (LRCLIB)
 
-- API gratuita y abierta: `https://lrclib.net/api/get?track_name=...&artist_name=...&album_name=...&duration=...`
-- Devuelve `syncedLyrics` (formato LRC con timestamps) o `plainLyrics`
-- El parser `parseLRC()` convierte LRC a `{startTimeMs, text}`
-- Caché de 60 minutos por trackId para no reconsultar en cada poll
-- Se busca por nombre de canción + artista + álbum + duración (no por ID de Spotify)
+- Free, open API: `https://lrclib.net/api/get?track_name=...&artist_name=...&album_name=...&duration=...`
+- Returns `syncedLyrics` (LRC format with timestamps) or `plainLyrics`
+- `parseLRC()` converts LRC to `{startTimeMs, text}`
+- 60-minute cache per trackId to avoid querying on every poll
+- Search by song name + artist + album + duration (not by Spotify ID)
 
 ### Frontend (app.js)
 
-- Polling cada 1 segundo a `/api/player`
-- `updateSync()` corre cada 100ms calculando la línea activa con `performance.now() - startDate`
-- Cuando está pausado, se congela el progreso en `pausedProgress` (la letra no avanza)
-- Tema Tesla: `html[data-theme="dark"]` / `html[data-theme="light"]` con paleta oficial Tesla
-  - Oscuro: fondo `#000000`, surface `#171A20`, texto `#FFFFFF`
-  - Claro: fondo `#FFFFFF`, surface `#F4F4F4`, texto `#171A20`
-- Persistencia del tema en `localStorage`
-- Iconos SVG inline (prev/play/next) minimalistas sin acento de color
+- Polling every 1 second to `/api/player` with `Authorization: Bearer <access_token>`
+- `updateSync()` runs every 100ms computing the active line with `performance.now() - startDate`
+- When paused, progress is frozen in `pausedProgress` (lyrics don't advance)
+- Tesla theme: `html[data-theme="dark"]` / `html[data-theme="light"]` with the official Tesla palette
+  - Dark: background `#000000`, surface `#171A20`, text `#FFFFFF`
+  - Light: background `#FFFFFF`, surface `#F4F4F4`, text `#171A20`
+- Theme persisted in `localStorage`
+- Inline SVG icons (prev/play/next), minimalist, no accent color
+- Logout button clears the user's tokens from `localStorage`
 
-### Controles
+### Controls
 
 - `/api/player/play` → PUT `https://api.spotify.com/v1/me/player/play`
 - `/api/player/pause` → PUT `https://api.spotify.com/v1/me/player/pause`
 - `/api/player/next` → POST `https://api.spotify.com/v1/me/player/next`
 - `/api/player/previous` → POST `https://api.spotify.com/v1/me/player/previous`
-- Controla el **dispositivo activo** de Spotify, SIN reproducir audio en la web
+- Controls the **active Spotify device**, without playing audio on the web
 
-## Variables de entorno
+## Environment variables
 
-| Variable | Requerida | Descripción |
-|----------|-----------|-------------|
-| `SPOTIFY_CLIENT_ID` | Sí | Client ID de la app Spotify |
-| `SPOTIFY_CLIENT_SECRET` | Sí | Client Secret de la app Spotify |
-| `PORT` | No | Puerto del servidor (default: 3000) |
-| `BASE_URL` | No | URL externa completa (ej: `https://xxx.trycloudflare.com`). En local se detecta automáticamente. |
-| `HOST` | No | Forzar IP/hostname concreto (default: detecta IP local) |
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `SPOTIFY_CLIENT_ID` | Yes | Client ID of the Spotify app |
+| `SPOTIFY_CLIENT_SECRET` | Yes | Client Secret of the Spotify app |
+| `PORT` | No | Server port (default: 3000) |
+| `BASE_URL` | No | Full external URL (e.g. `https://xxx.trycloudflare.com` or the Railway URL). Detected automatically when running locally. |
+| `HOST` | No | Force a specific IP/hostname (default: detects local IP) |
 
-## Limitaciones conocidas
+## Known limitations
 
-- **Dispositivos Spotify**: la Web API solo reporta reproducción si hay un "device activo" visible. Si la música suena en un dispositivo sin sesión privada, debería funcionar. Si `api/player` devuelve `playing:false` con canción sonando, verificar que **Sesión privada** esté desactivada en el dispositivo.
-- **URL temporal**: Cloudflare Tunnel gratuito genera URLs aleatorias. Para URL permanente se necesitaría un dominio propio + Cloudflare Tunnel autenticado, o hosting en la nube.
-- **Letras**: LRCLIB agrega desde múltiples fuentes. Algunas canciones pueden no tener letras sincronizadas.
-- **Tesla browser**: el navegador del Tesla es Chromium-based. Funciona con HTTPS. No soporta Web Audio API completa (por eso los controles usan la Web API de Spotify, no el Web Playback SDK).
+- **Spotify devices**: the Web API only reports playback if there's a visible "active device". If the music plays on a device with private session enabled, it won't be detected. If `api/player` returns `playing:false` while a song is playing, make sure **Private session** is disabled on the device.
+- **Temporary URL**: the free Cloudflare Tunnel generates random URLs. For a permanent URL you'd need your own domain + authenticated Cloudflare Tunnel, or hosted on the cloud (Railway provides a permanent public URL).
+- **Lyrics**: LRCLIB aggregates from multiple sources. Some songs may not have synchronized lyrics.
+- **Tesla browser**: the Tesla browser is Chromium-based and works with HTTPS. It doesn't fully support the Web Audio API (that's why the controls use Spotify's Web API, not the Web Playback SDK).
