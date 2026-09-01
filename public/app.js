@@ -155,7 +155,10 @@ function centerActiveLine(activeEl) {
   const playerBar = els.nowPlaying;
   const playerBarHeight =
     playerBar && !playerBar.classList.contains('hidden') ? playerBar.offsetHeight : 0;
-  const desiredCenter = (window.innerHeight - playerBarHeight) / 2;
+  const header = document.querySelector('header');
+  const topBound = header ? header.getBoundingClientRect().bottom : 0;
+  const bottomBound = window.innerHeight - playerBarHeight;
+  const desiredCenter = (topBound + bottomBound) / 2;
   const lineCenter = activeEl.getBoundingClientRect().top + activeEl.clientHeight / 2;
   const delta = desiredCenter - lineCenter;
   const target = container.scrollTop + delta;
