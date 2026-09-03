@@ -369,7 +369,7 @@ html[data-theme='light'] .lyric-line {
 
 html[data-theme='light'] .lyric-line.active,
 html[data-theme='light'] .lyric-line:hover {
-  color: var(--lyrics-color, #000000);
+  color: var(--lyrics-color, #ffffff);
 }
 
 /* "Sung" lines (before the active one) stay visible but dimmed */
