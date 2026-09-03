@@ -149,15 +149,49 @@ h1 {
 }
 
 /* Bottom player bar (anchored) */
+#bg-art {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+#bg-art-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  filter: blur(60px) saturate(1.8) brightness(0.65);
+  transform: scale(1.3);
+  opacity: 0;
+  transition: opacity 1.2s ease;
+}
+
+#bg-art-img.visible {
+  opacity: 1;
+}
+
+#app {
+  position: relative;
+  z-index: 1;
+}
+
 #now-playing {
   position: fixed;
   left: 0;
   right: 0;
   bottom: 0;
   z-index: 100;
-  background: var(--surface);
-  border-top: 1px solid var(--border);
+  background: rgba(23, 26, 32, 0.55);
+  backdrop-filter: blur(30px) saturate(1.6);
+  -webkit-backdrop-filter: blur(30px) saturate(1.6);
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
   box-shadow: 0 -8px 24px rgba(0, 0, 0, 0.25);
+}
+
+html[data-theme='light'] #now-playing {
+  background: rgba(244, 244, 244, 0.6);
+  border-top: 1px solid rgba(0, 0, 0, 0.08);
 }
 
 #player-visual {
@@ -313,20 +347,29 @@ h1 {
   font-weight: 500;
   line-height: 1.5;
   padding: 8px 12px;
-  color: var(--text-dim);
+  color: rgba(255, 255, 255, 0.3);
   transition: color 0.25s ease, transform 0.25s ease, font-size 0.25s ease, opacity 0.4s ease;
   cursor: default;
 }
 
 .lyric-line.active {
-  color: var(--text);
+  color: var(--lyrics-color, #ffffff);
   font-size: 26px;
   font-weight: 700;
   transform: scale(1.03);
 }
 
 .lyric-line:hover {
-  color: var(--text);
+  color: var(--lyrics-color, #ffffff);
+}
+
+html[data-theme='light'] .lyric-line {
+  color: rgba(0, 0, 0, 0.3);
+}
+
+html[data-theme='light'] .lyric-line.active,
+html[data-theme='light'] .lyric-line:hover {
+  color: var(--lyrics-color, #171A20);
 }
 
 /* "Sung" lines (before the active one) stay visible but dimmed */

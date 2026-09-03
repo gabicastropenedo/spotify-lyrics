@@ -21,6 +21,7 @@ const els = {
   prevBtn: $('#btn-prev'),
   iconPlay: $('#icon-play'),
   iconPause: $('#icon-pause'),
+  bgArtImg: $('#bg-art-img'),
 };
 
 // Estado local
@@ -197,6 +198,7 @@ function renderPlayer(data) {
     isSynced = false;
     currentTrackId = null;
     setPlayState(false);
+    applyAlbumArt(null);
     return;
   }
 
@@ -215,6 +217,7 @@ function renderPlayer(data) {
 
   if (trackChanged) {
     currentTrackId = track.id;
+    if (track.cover) applyAlbumArt(track.cover);
 
     menuLines = data.lyrics?.lines || [];
     isSynced = !!data.lyrics?.synced;
@@ -312,6 +315,58 @@ function setupControls() {
   els.prevBtn.addEventListener('click', () => apiControl('/api/player/previous'));
 }
 
+// ---- Album art background + adaptive lyrics color ----
+function extractColor(url) {
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.onload = () => {
+      try {
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d');
+        canvas.width = 32;
+        canvas.height = 32;
+        ctx.drawImage(img, 0, 0, 32, 32);
+        const data = ctx.getImageData(0, 0, 32, 32).data;
+        let r = 0, g = 0, b = 0;
+        for (let i = 0; i < data.length; i += 4) {
+          r += data[i];
+          g += data[i + 1];
+          b += data[i + 2];
+        }
+        const n = data.length / 4;
+        r = Math.round(r / n);
+        g = Math.round(g / n);
+        b = Math.round(b / n);
+        const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+        resolve({ r, g, b, luminance });
+      } catch {
+        resolve(null);
+      }
+    };
+    img.onerror = () => resolve(null);
+    img.src = url;
+  });
+}
+
+async function applyAlbumArt(url) {
+  if (!url) {
+    els.bgArtImg.classList.remove('visible');
+    els.bgArtImg.src = '';
+    document.documentElement.style.removeProperty('--lyrics-color');
+    return;
+  }
+  const color = await extractColor(url);
+  if (color) {
+    const textColor = color.luminance > 0.5 ? 'rgba(20, 20, 20, 0.92)' : 'rgba(255, 255, 255, 0.95)';
+    const dimColor = color.luminance > 0.5 ? 'rgba(0, 0, 0, 0.3)' : 'rgba(255, 255, 255, 0.3)';
+    document.documentElement.style.setProperty('--lyrics-color', textColor);
+    document.documentElement.style.setProperty('--lyrics-dim', dimColor);
+  }
+  els.bgArtImg.src = url;
+  els.bgArtImg.classList.add('visible');
+}
+
 // ---- Tema claro/oscuro (estilo Tesla) ----
 function setupTheme() {
   const stored = localStorage.getItem('theme');
@@ -351,6 +406,7 @@ function showLoggedOut() {
   currentTrackId = null;
   showLoading(false);
   showNoTrack(true);
+  applyAlbumArt(null);
   els.noTrack.textContent = 'Connect your Spotify account to see your lyrics.';
 }
 
