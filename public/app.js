@@ -358,8 +358,9 @@ async function applyAlbumArt(url) {
   }
   const color = await extractColor(url);
   if (color) {
+    const light = color.luminance > 0.5;
     const textColor = 'rgba(255, 255, 255, 0.95)';
-    const dimColor = color.luminance > 0.5 ? 'rgba(0, 0, 0, 0.5)' : 'rgba(255, 255, 255, 0.35)';
+    const dimColor = light ? 'rgba(0, 0, 0, 0.5)' : 'rgba(255, 255, 255, 0.35)';
     document.documentElement.style.setProperty('--lyrics-color', textColor);
     document.documentElement.style.setProperty('--lyrics-dim', dimColor);
     els.bgArtImg.style.filter = light
