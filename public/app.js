@@ -9,6 +9,9 @@ const els = {
   iconMoon: $('#icon-moon'),
   nowPlaying: $('#now-playing'),
   cover: $('#cover'),
+  playerPlaceholder: $('#player-placeholder'),
+  trackInfo: $('#track-info'),
+  playerControls: $('#player-controls'),
   trackName: $('#track-name'),
   trackArtist: $('#track-artist'),
   progressLine: $('#progress-line'),
@@ -190,7 +193,11 @@ function positionLyrics(activeIndex) {
 function renderPlayer(data) {
   // No song currently loaded (nothing playing on Spotify)
   if (!data.track) {
-    els.nowPlaying.classList.add('hidden');
+    els.nowPlaying.classList.remove('hidden');
+    els.cover.classList.add('hidden');
+    els.trackInfo.classList.add('hidden');
+    els.playerControls.classList.add('hidden');
+    els.playerPlaceholder.classList.remove('hidden');
     showNoTrack(true);
     showLoading(false);
     els.lyrics.innerHTML = '';
@@ -207,6 +214,10 @@ function renderPlayer(data) {
   const trackChanged = track.id !== currentTrackId;
 
   els.nowPlaying.classList.remove('hidden');
+  els.cover.classList.remove('hidden');
+  els.trackInfo.classList.remove('hidden');
+  els.playerControls.classList.remove('hidden');
+  els.playerPlaceholder.classList.add('hidden');
   showNoTrack(false);
   showLoading(false);
   setPlayState(data.playing);
@@ -403,7 +414,6 @@ function showLoggedOut() {
   stopPolling();
   els.loginBtn.classList.remove('hidden');
   els.logoutBtn.classList.add('hidden');
-  els.nowPlaying.classList.add('hidden');
   els.lyrics.innerHTML = '';
   menuLines = [];
   isSynced = false;
@@ -411,6 +421,11 @@ function showLoggedOut() {
   showLoading(false);
   showNoTrack(true);
   applyAlbumArt(null);
+  els.nowPlaying.classList.remove('hidden');
+  els.cover.classList.add('hidden');
+  els.trackInfo.classList.add('hidden');
+  els.playerControls.classList.add('hidden');
+  els.playerPlaceholder.classList.remove('hidden');
   els.noTrack.textContent = 'Connect your Spotify account to see your lyrics.';
 }
 

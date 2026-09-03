@@ -11,7 +11,6 @@
   <div id="bg-art"><img id="bg-art-img" alt="" /></div>
   <div id="app">
     <header>
-      <h1>Spotify Lyrics</h1>
       <div class="header-actions">
         <button id="theme-toggle" class="theme-toggle" title="Toggle light/dark mode" aria-label="Toggle theme">
           <svg id="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/></svg>
@@ -34,9 +33,10 @@
     </main>
   </div>
 
-  <div id="now-playing" class="hidden">
+  <div id="now-playing">
     <div id="player-visual">
-      <img id="cover" alt="Album cover" />
+      <img id="cover" alt="Album cover" class="hidden" />
+      <p id="player-placeholder" class="hidden">No song playing</p>
       <div id="track-info">
         <div id="track-name"></div>
         <div id="track-artist"></div>

@@ -62,7 +62,7 @@ main {
 header {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-end;
   padding: 12px 0;
   margin-bottom: 20px;
   border-bottom: 1px solid var(--border);
@@ -70,8 +70,7 @@ header {
 }
 
 h1 {
-  font-size: 22px;
-  font-weight: 700;
+  display: none;
 }
 
 .header-actions {
@@ -213,6 +212,12 @@ html[data-theme='light'] #now-playing {
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
 }
 
+#player-placeholder {
+  color: var(--text-dim);
+  font-size: 14px;
+  margin: 0;
+}
+
 #track-info {
   flex: 1;
   min-width: 0;
@@ -312,7 +317,7 @@ html[data-theme='light'] #now-playing {
   text-align: center;
   color: var(--text-dim);
   margin: auto;
-  font-size: 15px;
+  font-size: 20px;
 }
 
 #lyrics {
