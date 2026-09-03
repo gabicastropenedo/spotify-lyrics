@@ -51,6 +51,11 @@ app.use(express.static(path.join(__dirname, '..', 'public')));
 // the lyrics of a song are the same for all users.
 let lyricsCache = {}; // { trackId: { data, at } }
 
+// Last known playback state per user (keyed by access token). The Spotify
+// "currently-playing" endpoint returns nothing shortly after a track is paused,
+// so we remember the last track to keep the UI showing it while paused.
+const lastStateCache = new Map();
+
 function buildAuthUrl() {
   const state = crypto.randomBytes(16).toString('hex');
   const params = new URLSearchParams({
@@ -254,8 +259,15 @@ app.get('/api/player', async (req, res) => {
       headers: { Authorization: `Bearer ${accessToken}` },
     });
 
-    // 204 = no song currently playing
+    // 204 = no song currently playing.
+    // When the user is paused, Spotify stops reporting the track after a few
+    // seconds. Fall back to the last known state (kept paused) so the UI
+    // doesn't blank out. A fresh track replaces the cached state immediately.
     if (!playerResponse.data || !playerResponse.data.item) {
+      const last = lastStateCache.get(accessToken);
+      if (last) {
+        return res.json({ playing: false, paused: true, ...last });
+      }
       return res.json({ playing: false });
     }
 
@@ -272,6 +284,19 @@ app.get('/api/player', async (req, res) => {
         cover: item.album?.images?.[0]?.url || null,
       },
     };
+
+    // Remember the current playback so a paused track stays visible.
+    if (item.id) {
+      lastStateCache.set(accessToken, {
+        progress_ms: response.progress_ms,
+        track: response.track,
+      });
+      // Bound the map size.
+      if (lastStateCache.size > 500) {
+        const oldest = lastStateCache.keys().next().value;
+        lastStateCache.delete(oldest);
+      }
+    }
 
     // Get lyrics (with per-track cache to avoid re-querying on every poll)
     let lyricsData = lyricsCache[item.id];
