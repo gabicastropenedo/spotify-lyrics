@@ -358,10 +358,14 @@ async function applyAlbumArt(url) {
   }
   const color = await extractColor(url);
   if (color) {
-    const textColor = color.luminance > 0.5 ? 'rgba(20, 20, 20, 0.92)' : 'rgba(255, 255, 255, 0.95)';
-    const dimColor = color.luminance > 0.5 ? 'rgba(0, 0, 0, 0.3)' : 'rgba(255, 255, 255, 0.3)';
+    const light = color.luminance > 0.5;
+    const textColor = light ? '#000000' : 'rgba(255, 255, 255, 0.95)';
+    const dimColor = light ? 'rgba(0, 0, 0, 0.5)' : 'rgba(255, 255, 255, 0.35)';
     document.documentElement.style.setProperty('--lyrics-color', textColor);
     document.documentElement.style.setProperty('--lyrics-dim', dimColor);
+    els.bgArtImg.style.filter = light
+      ? 'blur(60px) saturate(1.4) brightness(0.38)'
+      : 'blur(60px) saturate(1.8) brightness(0.65)';
   }
   els.bgArtImg.src = url;
   els.bgArtImg.classList.add('visible');

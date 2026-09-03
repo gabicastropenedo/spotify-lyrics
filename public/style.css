@@ -190,8 +190,8 @@ h1 {
 }
 
 html[data-theme='light'] #now-playing {
-  background: rgba(244, 244, 244, 0.6);
-  border-top: 1px solid rgba(0, 0, 0, 0.08);
+  background: rgba(244, 244, 244, 0.7);
+  border-top: 1px solid rgba(0, 0, 0, 0.12);
 }
 
 #player-visual {
@@ -364,12 +364,12 @@ html[data-theme='light'] #now-playing {
 }
 
 html[data-theme='light'] .lyric-line {
-  color: rgba(0, 0, 0, 0.3);
+  color: rgba(0, 0, 0, 0.4);
 }
 
 html[data-theme='light'] .lyric-line.active,
 html[data-theme='light'] .lyric-line:hover {
-  color: var(--lyrics-color, #171A20);
+  color: var(--lyrics-color, #000000);
 }
 
 /* "Sung" lines (before the active one) stay visible but dimmed */
