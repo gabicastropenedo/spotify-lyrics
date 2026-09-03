@@ -265,8 +265,13 @@ app.get('/api/player', async (req, res) => {
     // doesn't blank out. A fresh track replaces the cached state immediately.
     if (!playerResponse.data || !playerResponse.data.item) {
       const last = lastStateCache.get(accessToken);
-      if (last) {
+      // Auto-clean: if the cached track has been paused for over a minute,
+      // drop it so the UI goes back to the empty state.
+      if (last && Date.now() - last.pausedAt < 60 * 1000) {
         return res.json({ playing: false, paused: true, ...last });
+      }
+      if (last) {
+        lastStateCache.delete(accessToken);
       }
       return res.json({ playing: false });
     }
@@ -290,6 +295,7 @@ app.get('/api/player', async (req, res) => {
       lastStateCache.set(accessToken, {
         progress_ms: response.progress_ms,
         track: response.track,
+        pausedAt: Date.now(),
       });
       // Bound the map size.
       if (lastStateCache.size > 500) {
