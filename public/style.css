@@ -156,7 +156,8 @@ html[data-theme='light'] #now-playing {
   max-width: 720px;
   margin: 0 auto;
   padding: 8px 16px;
-  min-height: 44px;
+  height: 60px;
+  overflow: hidden;
 }
 
 #cover {
@@ -174,6 +175,9 @@ html[data-theme='light'] #now-playing {
   font-size: 14px;
   margin: 0;
   text-align: center;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .bar-utils {
