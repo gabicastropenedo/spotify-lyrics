@@ -62,7 +62,7 @@ main {
 header {
   display: flex;
   align-items: center;
-  justify-content: flex-end;
+  justify-content: space-between;
   padding: 12px 0;
   margin-bottom: 20px;
   border-bottom: 1px solid var(--border);
@@ -79,30 +79,6 @@ h1 {
   gap: 12px;
 }
 
-.theme-toggle {
-  background: transparent;
-  border: none;
-  color: var(--text);
-  width: 38px;
-  height: 38px;
-  border-radius: 50%;
-  cursor: pointer;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  transition: background 0.2s, transform 0.1s;
-}
-
-.theme-toggle svg {
-  width: 20px;
-  height: 20px;
-}
-
-.theme-toggle:hover {
-  background: var(--surface-hover);
-  transform: scale(1.08);
-}
-
 #login-btn {
   background: var(--accent);
   color: #fff;
@@ -116,25 +92,6 @@ h1 {
 }
 
 #login-btn:hover {
-  transform: scale(1.03);
-}
-
-#logout-btn {
-  background: transparent;
-  border: 1px solid var(--border);
-  color: var(--text-dim);
-  padding: 10px 18px;
-  border-radius: 4px;
-  font-size: 14px;
-  font-weight: 500;
-  cursor: pointer;
-  transition: transform 0.1s, background 0.2s, color 0.2s, border-color 0.2s;
-}
-
-#logout-btn:hover {
-  background: var(--surface-hover);
-  border-color: var(--text-dim);
-  color: var(--text);
   transform: scale(1.03);
 }
 
@@ -213,9 +170,42 @@ html[data-theme='light'] #now-playing {
 }
 
 #player-placeholder {
+  flex: 1;
   color: var(--text-dim);
   font-size: 14px;
   margin: 0;
+  text-align: center;
+}
+
+.bar-utils {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.theme-toggle {
+  background: transparent;
+  border: none;
+  color: var(--text);
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.2s, transform 0.1s;
+}
+
+.theme-toggle svg {
+  width: 20px;
+  height: 20px;
+}
+
+.theme-toggle:hover {
+  background: var(--surface-hover);
+  transform: scale(1.08);
 }
 
 #track-info {

@@ -453,10 +453,12 @@ async function init() {
     }
   });
 
-  // Logout button
+  // Logout button (icon) with confirmation
   els.logoutBtn.addEventListener('click', () => {
-    clearSession();
-    showLoggedOut();
+    if (confirm('Log out of Spotify? You will need to connect again.')) {
+      clearSession();
+      showLoggedOut();
+    }
   });
 
   // Si el usuario viene del callback con error, mostrarlo
